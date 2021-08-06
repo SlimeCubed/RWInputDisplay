@@ -23,7 +23,7 @@ namespace RWInputDisplay
         public RWInputDisplay()
         {
             ModID = "Input Display";
-            Version = "1.2";
+            Version = "1.4";
             author = "Slime_Cubed";
         }
 
@@ -31,14 +31,16 @@ namespace RWInputDisplay
         {
             On.RoomCamera.ctor += RoomCamera_ctor;
             On.RoomCamera.ClearAllSprites += RoomCamera_ClearAllSprites;
-            //On.RoomCamera.DrawUpdate += RoomCamera_DrawUpdate;
             On.RainWorldGame.GrafUpdate += RainWorldGame_GrafUpdate;
         }
 
         private void RoomCamera_ClearAllSprites(On.RoomCamera.orig_ClearAllSprites orig, RoomCamera self)
         {
-            inputGraphics[self.cameraNumber]?.Remove();
-            inputGraphics[self.cameraNumber] = null;
+            if (inputGraphics[self.cameraNumber]?.cam == self)
+            {
+                inputGraphics[self.cameraNumber]?.Remove();
+                inputGraphics[self.cameraNumber] = null;
+            }
             orig(self);
         }
 
@@ -47,13 +49,14 @@ namespace RWInputDisplay
             if (disableInterpolation) timeStacker = 1f;
             orig(self, timeStacker);
             foreach (InputGraphic display in inputGraphics)
-                display.Update(timeStacker);
+                display?.Update(timeStacker);
         }
 
         private void RoomCamera_ctor(On.RoomCamera.orig_ctor orig, RoomCamera self, RainWorldGame game, int cameraNumber)
         {
             orig(self, game, cameraNumber);
             if (inputGraphics.Length <= cameraNumber) Array.Resize(ref inputGraphics, cameraNumber + 1);
+            inputGraphics[self.cameraNumber]?.Remove();
             InputGraphic ig = new InputGraphic(self);
             inputGraphics[cameraNumber] = ig;
             ig.Move();
@@ -83,6 +86,7 @@ namespace RWInputDisplay
             private RenderTexture _rt;
 
             public FSprite displaySprite;
+            public FContainer offscreenContainer;
 
             private FSprite _lerpBarBack;
             private FSprite _lerpBar;
@@ -117,6 +121,9 @@ namespace RWInputDisplay
                 _rtCam.nearClipPlane = 0.1f;
                 _rtCam.clearFlags = CameraClearFlags.SolidColor;
 
+                offscreenContainer = new FContainer();
+                Futile.stage.AddChild(offscreenContainer);
+
                 InitSprites();
             }
 
@@ -137,7 +144,7 @@ namespace RWInputDisplay
                     new InputButton(this, new Vector2(3f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation =  90f }, i => i.x == 1 ),
                 };
 
-                FContainer c = cam.ReturnFContainer("HUD2");
+                FContainer c = offscreenContainer;
 
                 // Analogue display
                 _analogBoxSize = InputButton.Size;
@@ -168,6 +175,8 @@ namespace RWInputDisplay
             public void Remove()
             {
                 Futile.atlasManager.UnloadAtlas("InputDisplay_" + cam.cameraNumber);
+                offscreenContainer.RemoveFromContainer();
+                displaySprite.RemoveFromContainer();
                 UnityEngine.Object.Destroy(_rtCam.gameObject);
             }
 
@@ -175,6 +184,9 @@ namespace RWInputDisplay
             private GetRTInputs _getInputs;
             public void Update(float timeStacker)
             {
+                if (displaySprite.container != cam.ReturnFContainer("HUD2"))
+                    cam.ReturnFContainer("HUD2").AddChild(displaySprite);
+
                 // Create a delegate that gets the current inputs
                 if (_getInputs == null)
                 {
@@ -222,6 +234,9 @@ namespace RWInputDisplay
                 _analogIndicator.SetPosition(aiCenter + CurrentInput.analogueDir * maxOffset);
                 _analogRTIndicator.SetPosition(aiCenter + rtInput.analogueDir * maxOffset);
                 _analogRTIndicator.isVisible = !hideRTIndicators;
+
+                displaySprite.MoveToFront();
+                offscreenContainer.MoveToFront();
             }
 
             private Vector2 DrawOrigin => new Vector2(-70000f, -70000f - cam.cameraNumber * 1000f);
@@ -246,9 +261,8 @@ namespace RWInputDisplay
                     FAtlasElement element = Futile.atlasManager.LoadAtlasFromTexture("InputDisplay_" + cam.cameraNumber, _rt).elements[0];
                     displaySprite = new FSprite(element) { anchorX = 0f, anchorY = 0f, alpha = alpha };
                     _rtCam.targetTexture = _rt;
-
-                    cam.ReturnFContainer("HUD2").AddChild(displaySprite);
                 }
+
                 if(_rt.width != rtW || _rt.height != rtH)
                 {
                     _rt.width = rtW;
@@ -332,7 +346,7 @@ namespace RWInputDisplay
 
             public void AddToContainer()
             {
-                FContainer c = parent.cam.ReturnFContainer("HUD2");
+                FContainer c = parent.offscreenContainer;
                 c.AddChild(_back);
                 c.AddChild(_front);
                 if(_key != null) c.AddChild(_key);
