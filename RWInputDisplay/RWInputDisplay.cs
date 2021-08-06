@@ -23,7 +23,7 @@ namespace RWInputDisplay
         public RWInputDisplay()
         {
             ModID = "Input Display";
-            Version = "1.4";
+            Version = "1.3";
             author = "Slime_Cubed";
         }
 
