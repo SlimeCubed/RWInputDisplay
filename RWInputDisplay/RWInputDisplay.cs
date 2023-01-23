@@ -1,37 +1,53 @@
 ﻿using System;
-using System.Reflection;
 using UnityEngine;
+using BepInEx;
+using System.Security;
+using System.Security.Permissions;
 using Inputs = Player.InputPackage;
+
+#pragma warning disable CS0618 // Type or member is obsolete
+[assembly: SecurityPermission(SecurityAction.RequestMinimum, SkipVerification = true)]
+[module: UnverifiableCode]
+#pragma warning restore CS0618 // Type or member is obsolete
 
 namespace RWInputDisplay
 {
-    public partial class RWInputDisplay : Partiality.Modloader.PartialityMod
+    [BepInPlugin(MOD_ID, "Input Display", "2.0.0")]
+    public partial class RWInputDisplay : BaseUnityPlugin
     {
+        public const string MOD_ID = "slime-cubed.inputdisplay";
+
         public static InputGraphic[] inputGraphics = new InputGraphic[1];
-        public static bool disableInterpolation = false;
-        public static bool hideRTIndicators = false;
-        public static bool outlineLabels = false;
-        public static bool showTimeStacker = false;
-        public static float alpha = 1f;
-        public static Color backColor = Color.white;
-        public static Color onColor = new Color(0.75f, 0.75f, 0.75f);
-        public static Color offColor = new Color(0.1f, 0.1f, 0.1f);
-        public static float scale = 1f;
+        public static Configurable<bool> enableInterpolation;
+        public static Configurable<bool> showRTIndicators;
+        public static Configurable<bool> outlineLabels;
+        public static Configurable<bool> showTimeStacker;
+        public static Configurable<float> alpha;
+        public static Configurable<Color> backColor;
+        public static Configurable<Color> onColor;
+        public static Configurable<Color> offColor;
+        public static Configurable<float> scale;
+        public static float Scale => scale.Value * 2f;
 
         public static Vector2 origin = new Vector2(64f, 64f);
 
-        public RWInputDisplay()
-        {
-            ModID = "Input Display";
-            Version = "1.3";
-            author = "Slime_Cubed";
-        }
+        private bool initialized;
 
-        public override void OnEnable()
+        public void Awake()
         {
-            On.RoomCamera.ctor += RoomCamera_ctor;
-            On.RoomCamera.ClearAllSprites += RoomCamera_ClearAllSprites;
-            On.RainWorldGame.GrafUpdate += RainWorldGame_GrafUpdate;
+            On.RainWorld.OnModsInit += (orig, self) =>
+            {
+                orig(self);
+
+                if (initialized) return;
+                initialized = true;
+
+                MachineConnector.SetRegisteredOI(MOD_ID, new RWIDOptions());
+
+                On.RoomCamera.ctor += RoomCamera_ctor;
+                On.RoomCamera.ClearAllSprites += RoomCamera_ClearAllSprites;
+                On.RainWorldGame.GrafUpdate += RainWorldGame_GrafUpdate;
+            };
         }
 
         private void RoomCamera_ClearAllSprites(On.RoomCamera.orig_ClearAllSprites orig, RoomCamera self)
@@ -46,7 +62,7 @@ namespace RWInputDisplay
 
         private void RainWorldGame_GrafUpdate(On.RainWorldGame.orig_GrafUpdate orig, RainWorldGame self, float timeStacker)
         {
-            if (disableInterpolation) timeStacker = 1f;
+            if (!enableInterpolation.Value) timeStacker = 1f;
             orig(self, timeStacker);
             foreach (InputGraphic display in inputGraphics)
                 display?.Update(timeStacker);
@@ -149,10 +165,10 @@ namespace RWInputDisplay
                 // Analogue display
                 _analogBoxSize = InputButton.Size;
                 _analogRelPos = new Vector2(spacing * 3f + 0.5f, spacing + 0.5f);
-                _analogBack = new FSprite("Futile_White") { anchorX = 0f, anchorY = 0f, scale = _analogBoxSize / 16f, color = backColor, shader = cam.game.rainWorld.Shaders["VectorCircle"] };
-                _analogFront = new FSprite("Futile_White") { anchorX = 0f, anchorY = 0f, scale = (_analogBoxSize - 2f) / 16f, color = offColor, shader = cam.game.rainWorld.Shaders["VectorCircle"] };
-                _analogIndicator = new FSprite("mouseEyeA1") { color = outlineLabels ? backColor : onColor };
-                _analogRTIndicator = new FSprite("mouseEyeA1") { color = outlineLabels ? backColor : onColor, alpha = 0.5f };
+                _analogBack = new FSprite("Futile_White") { anchorX = 0f, anchorY = 0f, scale = _analogBoxSize / 16f, color = backColor.Value, shader = cam.game.rainWorld.Shaders["VectorCircle"] };
+                _analogFront = new FSprite("Futile_White") { anchorX = 0f, anchorY = 0f, scale = (_analogBoxSize - 2f) / 16f, color = offColor.Value, shader = cam.game.rainWorld.Shaders["VectorCircle"] };
+                _analogIndicator = new FSprite("mouseEyeA1") { color = outlineLabels.Value ? backColor.Value : onColor.Value };
+                _analogRTIndicator = new FSprite("mouseEyeA1") { color = outlineLabels.Value ? backColor.Value : onColor.Value, alpha = 0.5f };
                 c.AddChild(_analogBack);
                 c.AddChild(_analogFront);
                 c.AddChild(_analogIndicator);
@@ -160,10 +176,10 @@ namespace RWInputDisplay
 
                 // timeStacker display
                 _lerpBarWidth = spacing * 4f - 8f;
-                _lerpBarBack = new FSprite("pixel") { anchorX = 0f, anchorY = 1f, scaleX = _lerpBarWidth, scaleY = 2f, color = offColor };
-                _lerpBar = new FSprite("pixel") { anchorX = 0f, anchorY = 1f, scaleX = _lerpBarWidth, scaleY = 2f, color = onColor };
-                _lerpBar.isVisible = showTimeStacker;
-                _lerpBarBack.isVisible = showTimeStacker;
+                _lerpBarBack = new FSprite("pixel") { anchorX = 0f, anchorY = 1f, scaleX = _lerpBarWidth, scaleY = 2f, color = offColor.Value };
+                _lerpBar = new FSprite("pixel") { anchorX = 0f, anchorY = 1f, scaleX = _lerpBarWidth, scaleY = 2f, color = onColor.Value };
+                _lerpBar.isVisible = showTimeStacker.Value;
+                _lerpBarBack.isVisible = showTimeStacker.Value;
                 c.AddChild(_lerpBarBack);
                 c.AddChild(_lerpBar);
 
@@ -180,19 +196,10 @@ namespace RWInputDisplay
                 UnityEngine.Object.Destroy(_rtCam.gameObject);
             }
 
-            private delegate Inputs GetRTInputs(int playerNumber, Options options, RainWorldGame.SetupValues setup);
-            private GetRTInputs _getInputs;
             public void Update(float timeStacker)
             {
                 if (displaySprite.container != cam.ReturnFContainer("HUD2"))
                     cam.ReturnFContainer("HUD2").AddChild(displaySprite);
-
-                // Create a delegate that gets the current inputs
-                if (_getInputs == null)
-                {
-                    Type rwInput = Type.GetType("RWInput, Assembly-CSharp");
-                    _getInputs = (GetRTInputs)Delegate.CreateDelegate(typeof(GetRTInputs), rwInput.GetMethod("PlayerInput", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static));
-                }
 
                 // Move the input display when left bracket is pressed
                 if (Input.GetKey(KeyCode.LeftBracket))
@@ -224,7 +231,7 @@ namespace RWInputDisplay
                 _lerpBar.scaleX = timeStacker * _lerpBarWidth;
 
                 // Cache the inputs at the start of the frame. It is not going to change while the buttons are updating
-                rtInput = _getInputs(0, cam.game.rainWorld.options, cam.game.rainWorld.setup);
+                rtInput = RWInput.PlayerInput(0, cam.game.rainWorld);
                 foreach (InputButton button in buttons)
                     button.Update();
 
@@ -233,7 +240,7 @@ namespace RWInputDisplay
                 float maxOffset = _analogBoxSize * 0.5f - 4f;
                 _analogIndicator.SetPosition(aiCenter + CurrentInput.analogueDir * maxOffset);
                 _analogRTIndicator.SetPosition(aiCenter + rtInput.analogueDir * maxOffset);
-                _analogRTIndicator.isVisible = !hideRTIndicators;
+                _analogRTIndicator.isVisible = showRTIndicators.Value;
 
                 displaySprite.MoveToFront();
                 offscreenContainer.MoveToFront();
@@ -250,7 +257,6 @@ namespace RWInputDisplay
                 {
                     _rt = new RenderTexture(rtW, rtH, 16);
                     _rt.filterMode = FilterMode.Point;
-                    _rt.generateMips = false;
 
                     if (displaySprite != null)
                     {
@@ -258,8 +264,8 @@ namespace RWInputDisplay
                         displaySprite?.RemoveFromContainer();
                     }
                     
-                    FAtlasElement element = Futile.atlasManager.LoadAtlasFromTexture("InputDisplay_" + cam.cameraNumber, _rt).elements[0];
-                    displaySprite = new FSprite(element) { anchorX = 0f, anchorY = 0f, alpha = alpha };
+                    FAtlasElement element = Futile.atlasManager.LoadAtlasFromTexture("InputDisplay_" + cam.cameraNumber, _rt, false).elements[0];
+                    displaySprite = new FSprite(element) { anchorX = 0f, anchorY = 0f, alpha = alpha.Value };
                     _rtCam.targetTexture = _rt;
                 }
 
@@ -291,7 +297,7 @@ namespace RWInputDisplay
 
         public class InputButton
         {
-            public static float Size => Mathf.Floor(24f * scale) * 2f;
+            public static float Size => Mathf.Floor(24f * Scale) * 2f;
 
             public InputGraphic parent;
             public Vector2 relPos;
@@ -306,7 +312,7 @@ namespace RWInputDisplay
             private InputButton(InputGraphic parent, Vector2 pos, Func<Inputs, bool> inputGetter)
             {
                 this.parent = parent;
-                _back = new FSprite("pixel") { anchorX = 0f, anchorY = 0f, scale = Size, color = backColor };
+                _back = new FSprite("pixel") { anchorX = 0f, anchorY = 0f, scale = Size, color = backColor.Value };
                 _front = new FSprite("pixel") { anchorX = 0f, anchorY = 0f, scale = Size - 2f };
                 _rtIndicator = new FSprite("deerEyeB") { anchorX = 0f, anchorY = 0f };
                 _inputGetter = inputGetter;
@@ -318,7 +324,7 @@ namespace RWInputDisplay
                 _key = new FLabel("font", keyName);
                 Move(Vector2.zero);
                 AddToContainer();
-                if (scale < 0.75f)
+                if (Scale < 0.75f)
                 {
                     _key.text = keyName.Substring(0, 1);
                 }
@@ -369,7 +375,7 @@ namespace RWInputDisplay
                 _back.SetPosition(pos);
                 _front.x = pos.x + 1f;
                 _front.y = pos.y + 1f;
-                float rtIndOffset = 1f + Mathf.Floor(5f * Mathf.Min(scale, 1f));
+                float rtIndOffset = 1f + Mathf.Floor(5f * Mathf.Min(Scale, 1f));
                 _rtIndicator.x = pos.x + rtIndOffset;
                 _rtIndicator.y = pos.y + rtIndOffset;
                 if (_key != null)
@@ -389,11 +395,11 @@ namespace RWInputDisplay
                 bool isDown = _inputGetter(parent.CurrentInput);
                 bool rtIsDown = _inputGetter(parent.rtInput);
                 
-                _front.color = isDown ? onColor : offColor;
-                _rtIndicator.color = rtIsDown ? onColor : offColor;
-                _rtIndicator.isVisible = !hideRTIndicators;
-                if (_key != null) _key.color = outlineLabels ? backColor : (isDown ? offColor : onColor);
-                if (_keySprite != null) _keySprite.color = outlineLabels ? backColor : (isDown ? offColor : onColor);
+                _front.color = isDown ? onColor.Value : offColor.Value;
+                _rtIndicator.color = rtIsDown ? onColor.Value : offColor.Value;
+                _rtIndicator.isVisible = showRTIndicators.Value;
+                if (_key != null) _key.color = outlineLabels.Value ? backColor.Value : (isDown ? offColor.Value : onColor.Value);
+                if (_keySprite != null) _keySprite.color = outlineLabels.Value ? backColor.Value : (isDown ? offColor.Value : onColor.Value);
             }
         }
     }

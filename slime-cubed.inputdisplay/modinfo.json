@@ -1,0 +1,10 @@
+{
+	"id": "slime-cubed.inputdisplay",
+	"name": "Input Display",
+	"version": "2.0.0",
+	"authors": "Slime_Cubed",
+	"description": "Adds a customizable on-screen input display. The display updates at the same time as the game, so it can be more precise than an external input display.",
+	"requirements": [],
+	"requirements_names": [],
+	"checksum_override_version": false
+}
