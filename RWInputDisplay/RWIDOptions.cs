@@ -79,6 +79,9 @@ namespace RWInputDisplay
             backColor = config.Bind("back_color", Color.white);
             onColor = config.Bind("on_color", new Color(0.75f, 0.75f, 0.75f));
             offColor = config.Bind("off_color", new Color(0.1f, 0.1f, 0.1f));
+
+            originX = config.Bind("origin_x", 64f);
+            originY = config.Bind("origin_y", 64f);
         }
 
         public override string ValidationString()

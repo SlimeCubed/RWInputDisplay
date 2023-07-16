@@ -29,10 +29,26 @@ namespace RWInputDisplay
         public static Configurable<Color> onColor;
         public static Configurable<Color> offColor;
         public static Configurable<float> scale;
+        public static Configurable<float> originX;
+        public static Configurable<float> originY;
         public static float Scale => scale.Value * 2f;
 
-        public static Vector2 origin = new Vector2(64f, 64f);
+        public static Vector2 Origin
+        {
+            get => new Vector2(originX.Value, originY.Value);
+            set
+            {
+                if (originX.Value != value.x || originY.Value != value.y)
+                {
+                    originDirty = true;
+                    originX.Value = value.x;
+                    originY.Value = value.y;
+                }
+            }
+        }
 
+        private static bool originDirty;
+        private static RWIDOptions options;
         private bool initialized;
 
         public void Awake()
@@ -41,18 +57,36 @@ namespace RWInputDisplay
             {
                 orig(self);
 
-                if (initialized) return;
-                initialized = true;
+                try
+                {
+                    if (options == null || MachineConnector.GetRegisteredOI(MOD_ID) != options)
+                    {
+                        MachineConnector.SetRegisteredOI(MOD_ID, options = new RWIDOptions());
+                    }
 
-                Futile.atlasManager.LoadImage("atlases/inputdisplay/analogcircle");
-                MachineConnector.SetRegisteredOI(MOD_ID, new RWIDOptions());
+                    if (initialized) return;
+                    initialized = true;
 
-                On.RoomCamera.ctor += RoomCamera_ctor;
-                On.RoomCamera.ClearAllSprites += RoomCamera_ClearAllSprites;
-                On.RainWorldGame.GrafUpdate += RainWorldGame_GrafUpdate;
+                    Futile.atlasManager.LoadImage("atlases/inputdisplay/analogcircle");
 
-                SaveDataManager.ApplySaveDataHooks();
+                    On.RoomCamera.ctor += RoomCamera_ctor;
+                    On.RoomCamera.ClearAllSprites += RoomCamera_ClearAllSprites;
+                    On.RainWorldGame.GrafUpdate += RainWorldGame_GrafUpdate;
+                    Application.quitting += Application_quitting;
+                }
+                catch(Exception e)
+                {
+                    Logger.LogError(e);
+                }
             };
+        }
+
+        private void Application_quitting()
+        {
+            if(originDirty)
+            {
+                MachineConnector.SaveConfig(options);
+            }
         }
 
         private void RoomCamera_ClearAllSprites(On.RoomCamera.orig_ClearAllSprites orig, RoomCamera self)
@@ -71,21 +105,11 @@ namespace RWInputDisplay
             orig(self, timeStacker);
             foreach (InputGraphic display in inputGraphics)
                 display?.Update(timeStacker);
-
-            // -FB
-            var save = self.rainWorld.GetMiscProgression();
-            save.InputDisplayPosX = origin.x;
-            save.InputDisplayPosY = origin.y;
         }
 
         private void RoomCamera_ctor(On.RoomCamera.orig_ctor orig, RoomCamera self, RainWorldGame game, int cameraNumber)
         {
             orig(self, game, cameraNumber);
-
-            // -FB
-            var save = self.game.rainWorld.GetMiscProgression();
-            origin.x = save.InputDisplayPosX;
-            origin.y = save.InputDisplayPosY;
 
             if (inputGraphics.Length <= cameraNumber) Array.Resize(ref inputGraphics, cameraNumber + 1);
             inputGraphics[self.cameraNumber]?.Remove();
@@ -105,7 +129,7 @@ namespace RWInputDisplay
                 get
                 {
                     float rad = _analogBoxSize * 0.5f;
-                    if (rad * rad > Vector2.SqrMagnitude((Vector2)Input.mousePosition - (origin + _analogRelPos + Vector2.one * (_analogBoxSize * 0.5f)))) return true;
+                    if (rad * rad > Vector2.SqrMagnitude((Vector2)Input.mousePosition - (Origin + _analogRelPos + Vector2.one * (_analogBoxSize * 0.5f)))) return true;
                     foreach (InputButton button in buttons) if (button.IsMouseOver) return true;
                     return false;
                 }
@@ -224,7 +248,7 @@ namespace RWInputDisplay
                 // Move the input display when left bracket is pressed
                 if (Input.GetKey(KeyCode.LeftBracket))
                 {
-                    origin = Input.mousePosition;
+                    Origin = Input.mousePosition;
                     Move();
                 }
 
@@ -235,7 +259,7 @@ namespace RWInputDisplay
                         _dragging = false;
                     else
                     {
-                        origin = (Vector2)Input.mousePosition + _dragOffset;
+                        Origin = (Vector2)Input.mousePosition + _dragOffset;
                         Move();
                     }
                 } else
@@ -243,7 +267,7 @@ namespace RWInputDisplay
                     if(Input.GetMouseButtonDown(0) && IsMouseOver)
                     {
                         _dragging = true;
-                        _dragOffset = origin - (Vector2)Input.mousePosition;
+                        _dragOffset = Origin - (Vector2)Input.mousePosition;
                     }
                 }
 
@@ -308,13 +332,13 @@ namespace RWInputDisplay
                 // Update display sprite
                 if (_rtCam)
                 {
-                    displaySprite.SetPosition(origin + _rtBounds.min - Vector2.one * 0.5f);
+                    displaySprite.SetPosition(Origin + _rtBounds.min - Vector2.one * 0.5f);
                     buttonContainer.SetPosition(OffscreenOrigin - Vector2.one * 0.5f);
                     buttonContainer.alpha = 1f;
                 }
                 else
                 {
-                    buttonContainer.SetPosition(origin - Vector2.one * 0.5f);
+                    buttonContainer.SetPosition(Origin - Vector2.one * 0.5f);
                     buttonContainer.alpha = alpha.Value;
                 }
 
@@ -383,8 +407,8 @@ namespace RWInputDisplay
                 get
                 {
                     Vector2 mp = Input.mousePosition;
-                    mp.x -= origin.x + relPos.x;
-                    mp.y -= origin.y + relPos.y;
+                    mp.x -= Origin.x + relPos.x;
+                    mp.y -= Origin.y + relPos.y;
                     if (mp.x < 0f || mp.y < 0f) return false;
                     if (mp.x > Size || mp.y > Size) return false;
                     return true;
