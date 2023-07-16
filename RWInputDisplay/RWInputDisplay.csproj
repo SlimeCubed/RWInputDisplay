@@ -10,6 +10,7 @@
     <RootNamespace>RWInputDisplay</RootNamespace>
     <AssemblyName>RWInputDisplay</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <LangVersion>11</LangVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
     <TargetFrameworkProfile />
@@ -45,6 +46,10 @@
     </Reference>
     <Reference Include="BepInEx">
       <HintPath>..\..\Rain World Remix\refs\BepInEx.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.JSON">
+      <HintPath>..\..\Rain World Remix\refs\Newtonsoft.JSON.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="HOOKS-Assembly-CSharp">
