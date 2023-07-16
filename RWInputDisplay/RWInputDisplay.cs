@@ -13,7 +13,7 @@ using RWCustom;
 
 namespace RWInputDisplay
 {
-    [BepInPlugin(MOD_ID, "Input Display", "2.1.0")]
+    [BepInPlugin(MOD_ID, "Input Display", "2.1.1")]
     public partial class RWInputDisplay : BaseUnityPlugin
     {
         public const string MOD_ID = "slime-cubed.inputdisplay";
@@ -50,6 +50,8 @@ namespace RWInputDisplay
                 On.RoomCamera.ctor += RoomCamera_ctor;
                 On.RoomCamera.ClearAllSprites += RoomCamera_ClearAllSprites;
                 On.RainWorldGame.GrafUpdate += RainWorldGame_GrafUpdate;
+
+                SaveDataManager.ApplySaveDataHooks();
             };
         }
 
@@ -69,11 +71,22 @@ namespace RWInputDisplay
             orig(self, timeStacker);
             foreach (InputGraphic display in inputGraphics)
                 display?.Update(timeStacker);
+
+            // -FB
+            var save = self.rainWorld.GetMiscProgression();
+            save.InputDisplayPosX = origin.x;
+            save.InputDisplayPosY = origin.y;
         }
 
         private void RoomCamera_ctor(On.RoomCamera.orig_ctor orig, RoomCamera self, RainWorldGame game, int cameraNumber)
         {
             orig(self, game, cameraNumber);
+
+            // -FB
+            var save = self.game.rainWorld.GetMiscProgression();
+            origin.x = save.InputDisplayPosX;
+            origin.y = save.InputDisplayPosY;
+
             if (inputGraphics.Length <= cameraNumber) Array.Resize(ref inputGraphics, cameraNumber + 1);
             inputGraphics[self.cameraNumber]?.Remove();
             InputGraphic ig = new InputGraphic(self);
