@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netframework4.8</TargetFramework>
+		<LangVersion>10</LangVersion>
+		<GenerateAssemblyInfo>False</GenerateAssemblyInfo>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Reference Include="..\lib\*.dll">
+		</Reference>
+	</ItemGroup>
+
+	<Target Name="PrepareModFiles" AfterTargets="PostBuildEvent">
+		<MakeDir Directories="$(ProjectDir)..\slime-cubed.inputdisplay\newest\plugins" />
+		<Copy SourceFiles="$(TargetPath);$(TargetDir)$(TargetName).pdb" DestinationFolder="$(ProjectDir)..\slime-cubed.inputdisplay\newest\plugins" />
+	</Target>
+
+</Project>

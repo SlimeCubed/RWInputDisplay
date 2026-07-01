@@ -2,10 +2,15 @@
 using RWCustom;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Security;
 using System.Security.Permissions;
 using UnityEngine;
 using Inputs = Player.InputPackage;
+
+[assembly: AssemblyVersion(RWInputDisplay.RWInputDisplay.MOD_VERSION)]
+[assembly: AssemblyFileVersion(RWInputDisplay.RWInputDisplay.MOD_VERSION)]
+[assembly: AssemblyCompany("Slime_Cubed")]
 
 #pragma warning disable CS0618 // Type or member is obsolete
 [assembly: SecurityPermission(SecurityAction.RequestMinimum, SkipVerification = true)]
@@ -14,10 +19,11 @@ using Inputs = Player.InputPackage;
 
 namespace RWInputDisplay
 {
-    [BepInPlugin(MOD_ID, "Input Display", "2.1.1")]
+    [BepInPlugin(MOD_ID, "Input Display", MOD_VERSION)]
     public partial class RWInputDisplay : BaseUnityPlugin
     {
         public const string MOD_ID = "slime-cubed.inputdisplay";
+        public const string MOD_VERSION = "2.2.0";
 
         public static InputGraphic[] inputGraphics = new InputGraphic[1];
         public static Configurable<bool> enableInterpolation;
@@ -77,7 +83,7 @@ namespace RWInputDisplay
                     On.RainWorldGame.GrafUpdate += RainWorldGame_GrafUpdate;
                     Application.quitting += Application_quitting;
                 }
-                catch(Exception e)
+                catch (Exception e)
                 {
                     Logger.LogError(e);
                 }
@@ -86,7 +92,7 @@ namespace RWInputDisplay
 
         private void Application_quitting()
         {
-            if(originDirty)
+            if (originDirty)
             {
                 MachineConnector.SaveConfig(options);
             }
@@ -126,7 +132,7 @@ namespace RWInputDisplay
             public RoomCamera cam;
             public List<InputButton> buttons;
             public Inputs rtInput;
-            
+
             public bool IsMouseOver
             {
                 get
@@ -162,7 +168,7 @@ namespace RWInputDisplay
             {
                 get
                 {
-                    if(cam.game.Players.Count > 0)
+                    if (cam.game.Players.Count > 0)
                         if (cam.game.Players[0].realizedCreature is Player ply) return ply.input[0];
                     return new Inputs();
                 }
@@ -208,7 +214,8 @@ namespace RWInputDisplay
                     buttons.Add(new InputButton(this, new Vector2(4f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 90f }, i => i.x == 1));
 
                     _analogRelPos = new Vector2(spacing * 2f + 0.5f, spacing + 0.5f);
-                } else
+                }
+                else
                 {
                     buttons.Add(new InputButton(this, new Vector2(0f, 0f) * spacing, "Grab", i => i.pckp));
                     buttons.Add(new InputButton(this, new Vector2(0f, 1f) * spacing, "Throw", i => i.thrw));
@@ -273,7 +280,7 @@ namespace RWInputDisplay
                 }
 
                 // Allow dragging the input display
-                if(_dragging)
+                if (_dragging)
                 {
                     if (!Input.GetMouseButton(0))
                         _dragging = false;
@@ -282,9 +289,10 @@ namespace RWInputDisplay
                         Origin = (Vector2)Input.mousePosition + _dragOffset;
                         Move();
                     }
-                } else
+                }
+                else
                 {
-                    if(Input.GetMouseButtonDown(0) && IsMouseOver)
+                    if (Input.GetMouseButtonDown(0) && IsMouseOver)
                     {
                         _dragging = true;
                         _dragOffset = Origin - (Vector2)Input.mousePosition;
@@ -440,11 +448,11 @@ namespace RWInputDisplay
                 FContainer c = parent.buttonContainer;
                 c.AddChild(_back);
                 c.AddChild(_front);
-                if(_key != null) c.AddChild(_key);
-                if(_keySprite != null) c.AddChild(_keySprite);
+                if (_key != null) c.AddChild(_key);
+                if (_keySprite != null) c.AddChild(_keySprite);
                 c.AddChild(_rtIndicator);
             }
-            
+
             public void RemoveFromContainer()
             {
                 _back.RemoveFromContainer();
@@ -479,7 +487,7 @@ namespace RWInputDisplay
             {
                 bool isDown = _inputGetter(parent.CurrentInput);
                 bool rtIsDown = _inputGetter(parent.rtInput);
-                
+
                 _front.color = isDown ? onColor.Value : offColor.Value;
                 _rtIndicator.color = rtIsDown ? onColor.Value : offColor.Value;
                 _rtIndicator.isVisible = showRTIndicators.Value;
