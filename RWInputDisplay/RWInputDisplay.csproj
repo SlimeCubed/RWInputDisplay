@@ -10,10 +10,7 @@
     <RootNamespace>RWInputDisplay</RootNamespace>
     <AssemblyName>RWInputDisplay</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-<<<<<<< Updated upstream
     <LangVersion>11</LangVersion>
-=======
->>>>>>> Stashed changes
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
     <TargetFrameworkProfile />
