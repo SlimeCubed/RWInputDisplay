@@ -17,7 +17,7 @@ namespace RWInputDisplay
         {
             base.Initialize();
             Tabs = new OpTab[] { new OpTab(this) };
-            
+
             // Title
             Tabs[0].AddItems(new OpLabel(new Vector2(32f, 536f), new Vector2(256f, 32f), "Input Display Options", FLabelAlignment.Left, true));
 
@@ -48,6 +48,11 @@ namespace RWInputDisplay
             Tabs[0].AddItems(new OpCheckBox(highPerformance, new Vector2(75f, 491f - boolSpacing * 4f)) { description = hpDesc });
             Tabs[0].AddItems(new OpLabel(new Vector2(100f, 491f - 3f - boolSpacing * 4f), new Vector2(150f, 32f), "High Performance", FLabelAlignment.Left) { description = hpDesc });
 
+            // Show special button display
+            string sbdDesc = "Display special button inputs";
+            Tabs[0].AddItems(new OpCheckBox(specialButtonDisplay, new Vector2(285f, 440f)) { description = sbdDesc });
+            Tabs[0].AddItems(new OpLabel(new Vector2(315f, 440f - 3f), new Vector2(150f, 32f), "Display Special Button", FLabelAlignment.Left) { description = sbdDesc });
+
             // Color pickers
             _backCol = new OpColorPicker(backColor, new Vector2(32f, 159f));
             Tabs[0].AddItems(_backCol, new OpLabel(new Vector2(32f, 317f), new Vector2(150f, 16f), "Outline Color"));
@@ -58,14 +63,20 @@ namespace RWInputDisplay
 
             // Alpha slider
             string aDesc = "How opaque the display is (0.75 by default)";
-            Tabs[0].AddItems(new OpLabel(new Vector2(278f, 439f), new Vector2(40f, 24f), "Alpha", FLabelAlignment.Right) { description = aDesc });
-            Tabs[0].AddItems(new OpFloatSlider(alpha, new Vector2(278f + 48f, 439f - 3f),  200, 2) { description = aDesc });
+            Tabs[0].AddItems(new OpLabel(new Vector2(278f, 500f), new Vector2(40f, 24f), "Alpha", FLabelAlignment.Right) { description = aDesc });
+            Tabs[0].AddItems(new OpFloatSlider(alpha, new Vector2(278f + 48f, 500f - 3f), 200, 2) { description = aDesc });
 
-            // Scale slider
+            // Scale slider (30 more y on alpha compared to scale)
             string sclDesc = "The scale factor of the display (0.50 by default)";
-            Tabs[0].AddItems(new OpLabel(new Vector2(278f, 409f), new Vector2(40f, 24f), "Scale", FLabelAlignment.Right) { description = sclDesc });
-            Tabs[0].AddItems(new OpFloatSlider(scale, new Vector2(278f + 48f, 409f - 3f), 200, 2) { description = sclDesc });
+            Tabs[0].AddItems(new OpLabel(new Vector2(278f, 470f), new Vector2(40f, 24f), "Scale", FLabelAlignment.Right) { description = sclDesc });
+            Tabs[0].AddItems(new OpFloatSlider(scale, new Vector2(278f + 48f, 470f - 3f), 200, 2) { description = sclDesc });
+
+            // Rebind moving all of the input display thingies
+            string pkDesc = "The key which will move the input display";
+            Tabs[0].AddItems(new OpLabel(new Vector2(315f, 434f - 25f), new Vector2(40f, 24f), "Position Key", FLabelAlignment.Right) { description = pkDesc });
+            Tabs[0].AddItems(new OpKeyBinder(positionKey, new Vector2(315f + 48f, 430f - 25f), new Vector2(140f, 20f), false, OpKeyBinder.BindController.AnyController) { description = pkDesc });
         }
+
 
         public RWIDOptions()
         {
@@ -79,6 +90,8 @@ namespace RWInputDisplay
             backColor = config.Bind("back_color", Color.white);
             onColor = config.Bind("on_color", new Color(0.75f, 0.75f, 0.75f));
             offColor = config.Bind("off_color", new Color(0.1f, 0.1f, 0.1f));
+            positionKey = config.Bind<KeyCode>("position_key", KeyCode.LeftBracket);
+            specialButtonDisplay = config.Bind("special_button_display", true);
 
             originX = config.Bind("origin_x", 64f);
             originY = config.Bind("origin_y", 64f);

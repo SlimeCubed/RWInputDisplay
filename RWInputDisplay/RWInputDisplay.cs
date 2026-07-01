@@ -1,10 +1,11 @@
-﻿using System;
-using UnityEngine;
-using BepInEx;
+﻿using BepInEx;
+using RWCustom;
+using System;
+using System.Collections.Generic;
 using System.Security;
 using System.Security.Permissions;
+using UnityEngine;
 using Inputs = Player.InputPackage;
-using RWCustom;
 
 #pragma warning disable CS0618 // Type or member is obsolete
 [assembly: SecurityPermission(SecurityAction.RequestMinimum, SkipVerification = true)]
@@ -24,6 +25,7 @@ namespace RWInputDisplay
         public static Configurable<bool> outlineLabels;
         public static Configurable<bool> showTimeStacker;
         public static Configurable<bool> highPerformance;
+        public static Configurable<bool> specialButtonDisplay;
         public static Configurable<float> alpha;
         public static Configurable<Color> backColor;
         public static Configurable<Color> onColor;
@@ -31,6 +33,7 @@ namespace RWInputDisplay
         public static Configurable<float> scale;
         public static Configurable<float> originX;
         public static Configurable<float> originY;
+        public static Configurable<KeyCode> positionKey;
         public static float Scale => scale.Value * 2f;
 
         public static Vector2 Origin
@@ -121,7 +124,7 @@ namespace RWInputDisplay
         public class InputGraphic
         {
             public RoomCamera cam;
-            public InputButton[] buttons;
+            public List<InputButton> buttons;
             public Inputs rtInput;
             
             public bool IsMouseOver
@@ -189,25 +192,42 @@ namespace RWInputDisplay
             public void InitSprites()
             {
                 float spacing = InputButton.Size + Mathf.Floor(InputButton.Size / 6f);
-                buttons = new InputButton[]
+                buttons = new List<InputButton>();
+
+                if (specialButtonDisplay.Value)
                 {
-                    // Buttons
-                    new InputButton(this, new Vector2(0f, 0f) * spacing, "Grab" , i => i.pckp   ),
-                    new InputButton(this, new Vector2(0f, 1f) * spacing, "Throw", i => i.thrw   ),
-                    new InputButton(this, new Vector2(1f, 1f) * spacing, "Jump" , i => i.jmp    ),
+                    buttons.Add(new InputButton(this, new Vector2(1f, 0f) * spacing, "Grab", i => i.pckp));
+                    buttons.Add(new InputButton(this, new Vector2(0f, 1f) * spacing, "Throw", i => i.thrw));
+                    buttons.Add(new InputButton(this, new Vector2(1f, 1f) * spacing, "Jump", i => i.jmp));
+                    buttons.Add(new InputButton(this, new Vector2(0f, 0f) * spacing, "Spec", i => i.spec));
+
+
+                    buttons.Add(new InputButton(this, new Vector2(3f, 1f) * spacing, new FSprite("ShortcutArrow") { rotation = 0f }, i => i.y == 1));
+                    buttons.Add(new InputButton(this, new Vector2(3f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 180f }, i => i.y == -1));
+                    buttons.Add(new InputButton(this, new Vector2(2f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 270f }, i => i.x == -1));
+                    buttons.Add(new InputButton(this, new Vector2(4f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 90f }, i => i.x == 1));
+
+                    _analogRelPos = new Vector2(spacing * 2f + 0.5f, spacing + 0.5f);
+                } else
+                {
+                    buttons.Add(new InputButton(this, new Vector2(0f, 0f) * spacing, "Grab", i => i.pckp));
+                    buttons.Add(new InputButton(this, new Vector2(0f, 1f) * spacing, "Throw", i => i.thrw));
+                    buttons.Add(new InputButton(this, new Vector2(1f, 1f) * spacing, "Jump", i => i.jmp));
                     //new InputButton(this, new Vector2(3f, 1f) * spacing, "Map"  , i => i.mp     ),
-                    // Axes
-                    new InputButton(this, new Vector2(2f, 1f) * spacing, new FSprite("ShortcutArrow") { rotation =   0f }, i => i.y == 1 ),
-                    new InputButton(this, new Vector2(2f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 180f }, i => i.y == -1),
-                    new InputButton(this, new Vector2(1f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 270f }, i => i.x == -1),
-                    new InputButton(this, new Vector2(3f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation =  90f }, i => i.x == 1 ),
-                };
+
+
+                    buttons.Add(new InputButton(this, new Vector2(2f, 1f) * spacing, new FSprite("ShortcutArrow") { rotation = 0f }, i => i.y == 1));
+                    buttons.Add(new InputButton(this, new Vector2(2f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 180f }, i => i.y == -1));
+                    buttons.Add(new InputButton(this, new Vector2(1f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 270f }, i => i.x == -1));
+                    buttons.Add(new InputButton(this, new Vector2(3f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 90f }, i => i.x == 1));
+
+                    _analogRelPos = new Vector2(spacing * 3f + 0.5f, spacing + 0.5f);
+                }
 
                 FContainer c = buttonContainer;
 
                 // Analogue display
                 _analogBoxSize = InputButton.Size;
-                _analogRelPos = new Vector2(spacing * 3f + 0.5f, spacing + 0.5f);
                 _analogBack = new FSprite("atlases/inputdisplay/analogcircle") { anchorX = 0f, anchorY = 0f, scale = _analogBoxSize / 256f, color = backColor.Value };
                 _analogFront = new FSprite("atlases/inputdisplay/analogcircle") { anchorX = 0f, anchorY = 0f, scale = (_analogBoxSize - 2f) / 256f, color = offColor.Value };
                 _analogIndicator = new FSprite("mouseEyeA1") { color = outlineLabels.Value ? backColor.Value : onColor.Value };
@@ -246,7 +266,7 @@ namespace RWInputDisplay
             public void Update(float timeStacker)
             {
                 // Move the input display when left bracket is pressed
-                if (Input.GetKey(KeyCode.LeftBracket))
+                if (Input.GetKey(positionKey.Value))
                 {
                     Origin = Input.mousePosition;
                     Move();
