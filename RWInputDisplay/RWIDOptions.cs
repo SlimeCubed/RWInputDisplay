@@ -75,17 +75,6 @@ namespace RWInputDisplay
             string pkDesc = "The key which will move the input display";
             Tabs[0].AddItems(new OpLabel(new Vector2(315f, 434f - 25f), new Vector2(40f, 24f), "Position Key", FLabelAlignment.Right) { description = pkDesc });
             Tabs[0].AddItems(new OpKeyBinder(positionKey, new Vector2(315f + 48f, 430f - 25f), new Vector2(140f, 20f), false, OpKeyBinder.BindController.AnyController) { description = pkDesc });
-            //public static Configurable<KeyCode> keybindKeyboard = Instance.config.Bind("keybindKeyboard", KeyCode.LeftAlt, new ConfigurableInfo(
-            //    "Keybind to fast roll for Keyboard.", null, "", "Keyboard"));
-            //    for (int x = 0; x <= 600; x += 100)
-            //    {
-            //        for (int y = 0; y <= 600; y += 100)
-            //        {
-            //            // This spawns a tiny text label at every 100-pixel interval
-            //            Tabs[0].AddItems(new OpLabel(new Vector2(x, y), new Vector2(60f, 20f), $"{x},{y}", FLabelAlignment.Left, true));
-
-            //        }
-            //    }
         }
 
 
