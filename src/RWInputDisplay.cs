@@ -1,10 +1,13 @@
 ﻿using BepInEx;
+using BepInEx.Logging;
 using RWCustom;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using System.Security;
 using System.Security.Permissions;
+using System.Text;
 using UnityEngine;
 using Inputs = Player.InputPackage;
 
@@ -20,7 +23,7 @@ using Inputs = Player.InputPackage;
 namespace RWInputDisplay;
 
 [BepInPlugin(MOD_ID, "Input Display", MOD_VERSION)]
-public partial class RWInputDisplay : BaseUnityPlugin
+public class RWInputDisplay : BaseUnityPlugin
 {
     public const string MOD_ID = "slime-cubed.inputdisplay";
     public const string MOD_VERSION = "2.2.0";
@@ -31,7 +34,8 @@ public partial class RWInputDisplay : BaseUnityPlugin
     public static Configurable<bool> outlineLabels;
     public static Configurable<bool> showTimeStacker;
     public static Configurable<bool> highPerformance;
-    public static Configurable<bool> specialButtonDisplay;
+    public static Configurable<int> layoutMode;
+    public static Configurable<string> customLayout;
     public static Configurable<float> alpha;
     public static Configurable<Color> backColor;
     public static Configurable<Color> onColor;
@@ -41,6 +45,17 @@ public partial class RWInputDisplay : BaseUnityPlugin
     public static Configurable<float> originY;
     public static Configurable<KeyCode> positionKey;
     public static float Scale => scale.Value * 2f;
+    public static new ManualLogSource Logger { get; private set; }
+
+    public static string defaultLayoutJson;
+    public static Layout defaultLayout;
+    public static Layout classicLayout;
+
+    public static LayoutMode LayoutMode
+    {
+        get => (LayoutMode)layoutMode.Value;
+        set => layoutMode.Value = (int)value;
+    }
 
     public static Vector2 Origin
     {
@@ -62,12 +77,21 @@ public partial class RWInputDisplay : BaseUnityPlugin
 
     public void Awake()
     {
+        Logger = base.Logger;
+
         On.RainWorld.OnModsInit += (orig, self) =>
         {
             orig(self);
 
             try
             {
+                defaultLayout = new Layout();
+                classicLayout = new Layout();
+
+                defaultLayoutJson = File.ReadAllText(AssetManager.ResolveFilePath("rwid-layouts/default.json"));
+                defaultLayout.FromJson(defaultLayoutJson);
+                classicLayout.FromJson(File.ReadAllText(AssetManager.ResolveFilePath("rwid-layouts/classic.json")));
+
                 if (options == null || MachineConnector.GetRegisteredOI(MOD_ID) != options)
                 {
                     MachineConnector.SetRegisteredOI(MOD_ID, options = new RWIDOptions());
@@ -88,6 +112,29 @@ public partial class RWInputDisplay : BaseUnityPlugin
                 Logger.LogError(e);
             }
         };
+    }
+
+    public static Layout GetCurrentLayout()
+    {
+        switch (LayoutMode)
+        {
+            default:
+            case LayoutMode.Default: return defaultLayout;
+            case LayoutMode.Classic: return classicLayout;
+            case LayoutMode.Custom:
+                var custom = new Layout();
+                try
+                {
+                    custom.FromJson(Encoding.UTF8.GetString(Convert.FromBase64String(customLayout.Value)));
+                    return custom;
+                }
+                catch (Exception e)
+                {
+                    Logger.LogError("Failed to load custom layout!");
+                    Logger.LogError(e);
+                    return defaultLayout;
+                }
+        }
     }
 
     private void Application_quitting()
@@ -122,7 +169,7 @@ public partial class RWInputDisplay : BaseUnityPlugin
 
         if (inputGraphics.Length <= cameraNumber) Array.Resize(ref inputGraphics, cameraNumber + 1);
         inputGraphics[self.cameraNumber]?.Remove();
-        InputGraphic ig = new InputGraphic(self);
+        InputGraphic ig = new InputGraphic(self, GetCurrentLayout());
         inputGraphics[cameraNumber] = ig;
         ig.Move();
     }
@@ -131,16 +178,16 @@ public partial class RWInputDisplay : BaseUnityPlugin
     {
         public RoomCamera cam;
         public List<InputButton> buttons;
+        public InputAnalog analog;
+        public LerpBar lerpBar;
         public Inputs rtInput;
 
         public bool IsMouseOver
         {
             get
             {
-                float rad = _analogBoxSize * 0.5f;
-                if (rad * rad > Vector2.SqrMagnitude((Vector2)Input.mousePosition - (Origin + _analogRelPos + Vector2.one * (_analogBoxSize * 0.5f)))) return true;
                 foreach (InputButton button in buttons) if (button.IsMouseOver) return true;
-                return false;
+                return analog != null && analog.IsMouseOver;
             }
         }
         private bool _dragging;
@@ -149,36 +196,32 @@ public partial class RWInputDisplay : BaseUnityPlugin
         private Camera _rtCam;
         private Rect _rtBounds;
         private RenderTexture _rt;
+        private Layout _layout;
+        private int _index;
 
         public FSprite displaySprite;
         public FContainer buttonContainer;
-
-        private FSprite _lerpBarBack;
-        private FSprite _lerpBar;
-        private float _lerpBarWidth;
-
-        private FSprite _analogBack;
-        private FSprite _analogFront;
-        private FSprite _analogIndicator;
-        private FSprite _analogRTIndicator;
-        private float _analogBoxSize;
-        private Vector2 _analogRelPos;
 
         public Inputs CurrentInput
         {
             get
             {
-                if (cam.game.Players.Count > 0)
-                    if (cam.game.Players[0].realizedCreature is Player ply) return ply.input[0];
-                return new Inputs();
+                if (cam == null)
+                    return RWInput.PlayerUIInput(0);
+                else if (cam.game.Players.Count > 0 && cam.game.Players[0].realizedCreature is Player ply)
+                    return ply.input[0];
+                else
+                    return new Inputs();
             }
         }
 
-        public InputGraphic(RoomCamera cam)
+        private InputGraphic(RoomCamera cam, int index, Layout layout)
         {
             this.cam = cam;
+            _index = index;
+            _layout = layout;
 
-            if (!highPerformance.Value)
+            if (!highPerformance.Value && alpha.Value < 1f)
             {
                 GameObject go = new GameObject("Input Display Camera");
                 _rtCam = go.AddComponent<Camera>();
@@ -195,65 +238,68 @@ public partial class RWInputDisplay : BaseUnityPlugin
             InitSprites();
         }
 
+        public InputGraphic(RoomCamera cam, Layout layout) : this(cam, cam.cameraNumber, layout)
+        {
+        }
+
+        public InputGraphic(int index, Layout layout) : this(null, index, layout)
+        {
+
+        }
+
         public void InitSprites()
         {
             float spacing = InputButton.Size + Mathf.Floor(InputButton.Size / 6f);
             buttons = new List<InputButton>();
 
-            if (specialButtonDisplay.Value)
+            Rect bounds = default;
+            void ExpandBounds(Rect add)
             {
-                buttons.Add(new InputButton(this, new Vector2(1f, 0f) * spacing, "Grab", i => i.pckp));
-                buttons.Add(new InputButton(this, new Vector2(0f, 1f) * spacing, "Throw", i => i.thrw));
-                buttons.Add(new InputButton(this, new Vector2(1f, 1f) * spacing, "Jump", i => i.jmp));
-                buttons.Add(new InputButton(this, new Vector2(0f, 0f) * spacing, "Spec", i => i.spec));
-
-
-                buttons.Add(new InputButton(this, new Vector2(3f, 1f) * spacing, new FSprite("ShortcutArrow") { rotation = 0f }, i => i.y == 1));
-                buttons.Add(new InputButton(this, new Vector2(3f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 180f }, i => i.y == -1));
-                buttons.Add(new InputButton(this, new Vector2(2f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 270f }, i => i.x == -1));
-                buttons.Add(new InputButton(this, new Vector2(4f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 90f }, i => i.x == 1));
-
-                _analogRelPos = new Vector2(spacing * 2f + 0.5f, spacing + 0.5f);
-            }
-            else
-            {
-                buttons.Add(new InputButton(this, new Vector2(0f, 0f) * spacing, "Grab", i => i.pckp));
-                buttons.Add(new InputButton(this, new Vector2(0f, 1f) * spacing, "Throw", i => i.thrw));
-                buttons.Add(new InputButton(this, new Vector2(1f, 1f) * spacing, "Jump", i => i.jmp));
-                //new InputButton(this, new Vector2(3f, 1f) * spacing, "Map"  , i => i.mp     ),
-
-
-                buttons.Add(new InputButton(this, new Vector2(2f, 1f) * spacing, new FSprite("ShortcutArrow") { rotation = 0f }, i => i.y == 1));
-                buttons.Add(new InputButton(this, new Vector2(2f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 180f }, i => i.y == -1));
-                buttons.Add(new InputButton(this, new Vector2(1f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 270f }, i => i.x == -1));
-                buttons.Add(new InputButton(this, new Vector2(3f, 0f) * spacing, new FSprite("ShortcutArrow") { rotation = 90f }, i => i.x == 1));
-
-                _analogRelPos = new Vector2(spacing * 3f + 0.5f, spacing + 0.5f);
+                if (bounds != default)
+                {
+                    bounds = Rect.MinMaxRect(
+                        Math.Min(bounds.xMin, add.xMin),
+                        Math.Min(bounds.yMin, add.yMin),
+                        Math.Max(bounds.xMax, add.xMax),
+                        Math.Max(bounds.yMax, add.yMax)
+                    );
+                }
+                else
+                {
+                    bounds = add;
+                }
             }
 
-            FContainer c = buttonContainer;
+            // Create button sprites based on the current layout
+            foreach (var key in _layout.keys.Values)
+            {
+                var button = new InputButton(this, key.pos * spacing, key);
+                buttons.Add(button);
+                ExpandBounds(button.Bounds);
+            }
 
             // Analogue display
-            _analogBoxSize = InputButton.Size;
-            _analogBack = new FSprite("atlases/inputdisplay/analogcircle") { anchorX = 0f, anchorY = 0f, scale = _analogBoxSize / 256f, color = backColor.Value };
-            _analogFront = new FSprite("atlases/inputdisplay/analogcircle") { anchorX = 0f, anchorY = 0f, scale = (_analogBoxSize - 2f) / 256f, color = offColor.Value };
-            _analogIndicator = new FSprite("mouseEyeA1") { color = outlineLabels.Value ? backColor.Value : onColor.Value };
-            _analogRTIndicator = new FSprite("mouseEyeA1") { color = outlineLabels.Value ? backColor.Value : onColor.Value, alpha = 0.5f };
-            c.AddChild(_analogBack);
-            c.AddChild(_analogFront);
-            c.AddChild(_analogIndicator);
-            c.AddChild(_analogRTIndicator);
+            if (_layout.analog != null)
+            {
+                analog = new InputAnalog(this, _layout.analog.pos * spacing, _layout.analog);
+                ExpandBounds(analog.Bounds);
+            }
 
             // timeStacker display
-            _lerpBarWidth = spacing * 4f - 8f;
-            _lerpBarBack = new FSprite("pixel") { anchorX = 0f, anchorY = 1f, scaleX = _lerpBarWidth, scaleY = 2f, color = offColor.Value };
-            _lerpBar = new FSprite("pixel") { anchorX = 0f, anchorY = 1f, scaleX = _lerpBarWidth, scaleY = 2f, color = onColor.Value };
-            _lerpBar.isVisible = showTimeStacker.Value;
-            _lerpBarBack.isVisible = showTimeStacker.Value;
-            c.AddChild(_lerpBarBack);
-            c.AddChild(_lerpBar);
+            if (showTimeStacker.Value)
+            {
+                lerpBar = new LerpBar(this, new Vector2(bounds.xMin, bounds.yMin - 8f), bounds.width);
+                ExpandBounds(lerpBar.Bounds);
+            }
 
-            _rtBounds = new Rect(-10f, -10f, spacing * 4f - 8f + 20f, spacing * 2f - 8f + 20f);
+            _rtBounds = Rect.MinMaxRect(
+                Mathf.Floor(bounds.xMin) - 4f,
+                Mathf.Floor(bounds.yMin) - 4f,
+                Mathf.Ceil(bounds.xMax) + 4f,
+                Mathf.Ceil(bounds.yMax) + 4f
+            );
+            _rtBounds.width = Mathf.Ceil(_rtBounds.width / 2f) * 2f;
+            _rtBounds.height = Mathf.Ceil(_rtBounds.height / 2f) * 2f;
 
             Move();
         }
@@ -264,7 +310,7 @@ public partial class RWInputDisplay : BaseUnityPlugin
 
             if (_rtCam)
             {
-                Futile.atlasManager.UnloadAtlas("InputDisplay_" + cam.cameraNumber);
+                Futile.atlasManager.UnloadAtlas("InputDisplay_" + _index);
                 displaySprite.RemoveFromContainer();
                 Destroy(_rtCam.gameObject);
             }
@@ -300,7 +346,7 @@ public partial class RWInputDisplay : BaseUnityPlugin
             }
 
             // Change the lerp bar to display the current timeStacker
-            _lerpBar.scaleX = timeStacker * _lerpBarWidth;
+            lerpBar?.Update(timeStacker);
 
             // Cache the inputs at the start of the frame. It is not going to change while the buttons are updating
             rtInput = RWInput.PlayerInput(0);
@@ -308,23 +354,26 @@ public partial class RWInputDisplay : BaseUnityPlugin
                 button.Update();
 
             // Update the analog input
-            Vector2 aiCenter = new Vector2(_analogRelPos.x + _analogBoxSize * 0.5f - 0.5f, _analogRelPos.y + _analogBoxSize * 0.5f - 0.5f);
-            float maxOffset = _analogBoxSize * 0.5f - 4f;
-            _analogIndicator.SetPosition(aiCenter + CurrentInput.analogueDir * maxOffset);
-            _analogRTIndicator.SetPosition(aiCenter + rtInput.analogueDir * maxOffset);
-            _analogRTIndicator.isVisible = showRTIndicators.Value;
+            analog?.Update();
+            
 
+            var container = cam?.ReturnFContainer("HUD2") ?? Futile.stage;
             if (_rtCam)
             {
-                if (displaySprite.container != cam.ReturnFContainer("HUD2"))
-                    cam.ReturnFContainer("HUD2").AddChild(displaySprite);
+                if (displaySprite.container != container)
+                    container.AddChild(displaySprite);
                 displaySprite.MoveToFront();
+            }
+            else
+            {
+                if (buttonContainer.container != container)
+                    container.AddChild(buttonContainer);
             }
 
             buttonContainer.MoveToFront();
         }
 
-        private Vector2 OffscreenOrigin => new Vector2(-70000f, -70000f - cam.cameraNumber * 1000f);
+        private Vector2 OffscreenOrigin => new Vector2(-70000f, -70000f - _index * 1000f);
 
         public void Move()
         {
@@ -341,11 +390,11 @@ public partial class RWInputDisplay : BaseUnityPlugin
 
                     if (displaySprite != null)
                     {
-                        Futile.atlasManager.UnloadAtlas("InputDisplay_" + cam.cameraNumber);
+                        Futile.atlasManager.UnloadAtlas("InputDisplay_" + _index);
                         displaySprite?.RemoveFromContainer();
                     }
 
-                    FAtlasElement element = Futile.atlasManager.LoadAtlasFromTexture("InputDisplay_" + cam.cameraNumber, _rt, false).elements[0];
+                    FAtlasElement element = Futile.atlasManager.LoadAtlasFromTexture("InputDisplay_" + _index, _rt, false).elements[0];
                     displaySprite = new FSprite(element) { anchorX = 0f, anchorY = 0f, alpha = alpha.Value };
                     _rtCam.targetTexture = _rt;
                 }
@@ -370,19 +419,9 @@ public partial class RWInputDisplay : BaseUnityPlugin
                 buttonContainer.alpha = alpha.Value;
             }
 
-            // Update components
-            _lerpBarBack.SetPosition(0f, -8f);
-            _lerpBar.SetPosition(0f, -8f);
-
-            foreach (InputButton button in buttons)
-                button.Move(new Vector2(0f, 0f));
-
-            _analogBack.SetPosition(_analogRelPos);
-            _analogFront.SetPosition(_analogRelPos + Vector2.one);
-
             if (_rtCam)
             {
-                _rtCam.transform.position = (Vector3)(OffscreenOrigin + _rtBounds.center) + Vector3.forward * -10f;
+                _rtCam.transform.position = (Vector3)(OffscreenOrigin + _rtBounds.center + new Vector2(0.5f, 0.5f)) + Vector3.forward * -10f;
                 _rtCam.orthographicSize = _rtBounds.height / 2f;
             }
         }
@@ -394,6 +433,7 @@ public partial class RWInputDisplay : BaseUnityPlugin
 
         public InputGraphic parent;
         public Vector2 relPos;
+        public Rect Bounds => new Rect(relPos, Vector2.one * Size);
 
         private FSprite _back;
         private FSprite _front;
@@ -402,31 +442,32 @@ public partial class RWInputDisplay : BaseUnityPlugin
         private FSprite _keySprite;
         private Func<Inputs, bool> _inputGetter;
 
-        private InputButton(InputGraphic parent, Vector2 pos, Func<Inputs, bool> inputGetter)
+        public InputButton(InputGraphic parent, Vector2 pos, Layout.Key key)
         {
             this.parent = parent;
             _back = new FSprite("pixel") { anchorX = 0f, anchorY = 0f, scale = Size, color = backColor.Value };
             _front = new FSprite("pixel") { anchorX = 0f, anchorY = 0f, scale = Size - 2f };
             _rtIndicator = new FSprite("deerEyeB") { anchorX = 0f, anchorY = 0f };
-            _inputGetter = inputGetter;
+            _inputGetter = key.inputGetter;
             relPos = pos;
-        }
 
-        public InputButton(InputGraphic parent, Vector2 pos, string keyName, Func<Inputs, bool> inputGetter) : this(parent, pos, inputGetter)
-        {
-            _key = new FLabel(Custom.GetFont(), keyName);
-            Move(Vector2.zero);
-            AddToContainer();
-            if (Scale < 0.75f)
+            // Text
+            if (!string.IsNullOrEmpty(key.text))
             {
-                _key.text = keyName.Substring(0, 1);
+                _key = new FLabel(Custom.GetFont(), key.text);
+                if (key.abbreviate && Scale < 0.75f)
+                {
+                    _key.text = key.text.Substring(0, 1);
+                }
             }
-        }
+            
+            // Sprite
+            if (key.sprite != null)
+            {
+                _keySprite = new FSprite(key.sprite) { rotation = key.spriteAngle };
+            }
 
-        public InputButton(InputGraphic parent, Vector2 pos, FSprite keySprite, Func<Inputs, bool> inputGetter) : this(parent, pos, inputGetter)
-        {
-            _keySprite = keySprite;
-            Move(Vector2.zero);
+            Move();
             AddToContainer();
         }
 
@@ -443,7 +484,7 @@ public partial class RWInputDisplay : BaseUnityPlugin
             }
         }
 
-        public void AddToContainer()
+        private void AddToContainer()
         {
             FContainer c = parent.buttonContainer;
             c.AddChild(_back);
@@ -453,18 +494,9 @@ public partial class RWInputDisplay : BaseUnityPlugin
             c.AddChild(_rtIndicator);
         }
 
-        public void RemoveFromContainer()
+        private void Move()
         {
-            _back.RemoveFromContainer();
-            _front.RemoveFromContainer();
-            _rtIndicator.RemoveFromContainer();
-            _key?.RemoveFromContainer();
-            _keySprite?.RemoveFromContainer();
-        }
-
-        public void Move(Vector2 origin)
-        {
-            Vector2 pos = origin + relPos + Vector2.one * 0.01f;
+            Vector2 pos = relPos + Vector2.one * 0.01f;
             _back.SetPosition(pos);
             _front.x = pos.x + 1f;
             _front.y = pos.y + 1f;
@@ -495,4 +527,98 @@ public partial class RWInputDisplay : BaseUnityPlugin
             if (_keySprite != null) _keySprite.color = outlineLabels.Value ? backColor.Value : (isDown ? offColor.Value : onColor.Value);
         }
     }
+
+    public class InputAnalog
+    {
+        public static float Diameter => InputButton.Size;
+        public static float Radius => InputButton.Size / 2f;
+
+        public InputGraphic parent;
+        public Vector2 relPos;
+        public Rect Bounds => new Rect(relPos, Vector2.one * Diameter);
+
+        private FSprite _analogBack;
+        private FSprite _analogFront;
+        private FSprite _analogIndicator;
+        private FSprite _analogRTIndicator;
+
+        public InputAnalog(InputGraphic parent, Vector2 pos, Layout.Analog analog)
+        {
+            this.parent = parent;
+            relPos = pos;
+
+            _analogBack = new FSprite("atlases/inputdisplay/analogcircle") { anchorX = 0f, anchorY = 0f, scale = Diameter / 256f, color = backColor.Value };
+            _analogFront = new FSprite("atlases/inputdisplay/analogcircle") { anchorX = 0f, anchorY = 0f, scale = (Diameter - 2f) / 256f, color = offColor.Value };
+            _analogIndicator = new FSprite("mouseEyeA1") { color = outlineLabels.Value ? backColor.Value : onColor.Value };
+            _analogRTIndicator = new FSprite("mouseEyeA1") { color = outlineLabels.Value ? backColor.Value : onColor.Value, alpha = 0.5f };
+
+            _analogBack.SetPosition(relPos);
+            _analogFront.SetPosition(relPos + Vector2.one);
+
+            FContainer c = parent.buttonContainer;
+            c.AddChild(_analogBack);
+            c.AddChild(_analogFront);
+            c.AddChild(_analogIndicator);
+            c.AddChild(_analogRTIndicator);
+        }
+
+        public bool IsMouseOver
+        {
+            get
+            {
+                Vector2 mp = Input.mousePosition;
+                mp.x -= Origin.x + relPos.x + Radius;
+                mp.y -= Origin.y + relPos.y + Radius;
+                return mp.magnitude <= Radius;
+            }
+        }
+
+        public void Update()
+        {
+            var center = relPos + Vector2.one * Radius;
+            float maxOffset = Diameter * 0.5f - 4f;
+            _analogIndicator.SetPosition(center + parent.CurrentInput.analogueDir * maxOffset);
+            _analogRTIndicator.SetPosition(center + parent.rtInput.analogueDir * maxOffset);
+        }
+    }
+
+    public class LerpBar
+    {
+        public InputGraphic parent;
+        public Vector2 relPos;
+        public Rect Bounds => new Rect(relPos, new Vector2(_lerpBarWidth, 2f));
+
+        private FSprite _lerpBarBack;
+        private FSprite _lerpBar;
+        private float _lerpBarWidth;
+
+        public LerpBar(InputGraphic parent, Vector2 pos, float width)
+        {
+            this.parent = parent;
+            relPos = pos;
+
+            _lerpBarWidth = width;
+            _lerpBarBack = new FSprite("pixel") { anchorX = 0f, anchorY = 1f, scaleX = _lerpBarWidth, scaleY = 2f, color = offColor.Value };
+            _lerpBar = new FSprite("pixel") { anchorX = 0f, anchorY = 1f, scaleX = _lerpBarWidth, scaleY = 2f, color = onColor.Value };
+
+            _lerpBarBack.SetPosition(relPos);
+            _lerpBar.SetPosition(relPos);
+
+            FContainer c = parent.buttonContainer;
+            c.AddChild(_lerpBarBack);
+            c.AddChild(_lerpBar);
+        }
+
+        public void Update(float timeStacker)
+        {
+            _lerpBar.scaleX = timeStacker * _lerpBarWidth;
+        }
+    }
+}
+
+public enum LayoutMode
+{
+    Default,
+    Classic,
+    Custom
 }

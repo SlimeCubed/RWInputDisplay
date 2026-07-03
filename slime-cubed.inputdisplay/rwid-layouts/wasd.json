@@ -1,0 +1,11 @@
+{
+    "left": { "x": 0, "y": 0, "text": "A", "sprite": null },
+    "down": { "x": 1, "y": 0, "text": "S", "sprite": null },
+    "right": { "x": 2, "y": 0, "text": "D", "sprite": null },
+    "up": { "x": 1, "y": 1, "text": "W", "sprite": null },
+    
+    "jump": { "x": 3.5, "y": 0 },
+    "throw": { "x": 4.5, "y": 0 },
+    "grab": { "x": 4, "y": 1 },
+    "special": { "x": 5, "y": 1 }
+}

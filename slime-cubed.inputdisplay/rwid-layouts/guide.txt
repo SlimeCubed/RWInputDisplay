@@ -1,0 +1,24 @@
+Layouts are defined as a JSON object like follows:
+{
+    "special": { ... },
+    "grab": { ... },
+    "jump": { ... },
+    "throw": { ... },
+    "left": { ... },
+    "right": { ... },
+    "up": { ... },
+    "down": { ... },
+    "analog": { ... }
+}
+
+All buttons are optional. Any that are omitted won't be included in the layout.
+Each button can have these optional properties:
+    "x": (number) x position
+    "y": (number) y position
+    "abbreviate": (boolean) set to false to always use the full text, even when at small sizes
+    "text": (string) the text to display on the button, or null to remove the text
+    "sprite": (string) a sprite name to display on the button, such as "ShortcutArrow" for an arrow, or null to remove the sprite
+    "sprite_angle": (number) clockwise rotation in degrees of the button's sprite
+
+"analog" (the joystick indicator) is a special case, and ignores everything except "x" and "y".
+"x" and "y" are typically integers, but fractional values are allowed. See wasd.json for an example.
