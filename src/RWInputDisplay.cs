@@ -26,7 +26,7 @@ namespace RWInputDisplay;
 public class RWInputDisplay : BaseUnityPlugin
 {
     public const string MOD_ID = "slime-cubed.inputdisplay";
-    public const string MOD_VERSION = "2.2.0";
+    public const string MOD_VERSION = "2.3.0";
 
     public static InputGraphic[] inputGraphics = new InputGraphic[1];
     public static Configurable<bool> enableInterpolation;
@@ -47,7 +47,7 @@ public class RWInputDisplay : BaseUnityPlugin
     public static float Scale => scale.Value * 2f;
     public static new ManualLogSource Logger { get; private set; }
 
-    public static string defaultLayoutJson;
+    public static string fullLayoutJson;
     public static Layout defaultLayout;
     public static Layout classicLayout;
 
@@ -88,8 +88,8 @@ public class RWInputDisplay : BaseUnityPlugin
                 defaultLayout = new Layout();
                 classicLayout = new Layout();
 
-                defaultLayoutJson = File.ReadAllText(AssetManager.ResolveFilePath("rwid-layouts/default.json"));
-                defaultLayout.FromJson(defaultLayoutJson);
+                fullLayoutJson = File.ReadAllText(AssetManager.ResolveFilePath("rwid-layouts/full.json"));
+                defaultLayout.FromJson(File.ReadAllText(AssetManager.ResolveFilePath("rwid-layouts/default.json")));
                 classicLayout.FromJson(File.ReadAllText(AssetManager.ResolveFilePath("rwid-layouts/classic.json")));
 
                 if (options == null || MachineConnector.GetRegisteredOI(MOD_ID) != options)

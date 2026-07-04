@@ -8,8 +8,11 @@ Layouts are defined as a JSON object like follows:
     "right": { ... },
     "up": { ... },
     "down": { ... },
-    "analog": { ... }
+    "analog": { ... },
+    "fastroll": { ... }
 }
+
+"fastroll" lights up when holding the correct analog direction to perform a fast roll. See https://rwtechwiki.github.io/Movement/fastroll for more information.
 
 All buttons are optional. Any that are omitted won't be included in the layout.
 Each button can have these optional properties:

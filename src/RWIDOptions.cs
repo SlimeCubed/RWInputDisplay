@@ -227,7 +227,7 @@ public class RWIDOptions : OptionInterface
         positionKey = config.Bind("position_key", KeyCode.LeftBracket);
         layoutMode = config.Bind("layout_mode", (int)LayoutMode.Default);
 
-        var defaultBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(defaultLayoutJson));
+        var defaultBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(fullLayoutJson));
         var info = new ConfigurableInfo("Base64-encoded JSON that defines a display layout.");
         customLayout = config.Bind("custom_layout", defaultBase64, info: info);
 
