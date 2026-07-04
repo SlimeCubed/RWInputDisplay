@@ -10,7 +10,7 @@ public class Layout
 {
     private static readonly Dictionary<string, Key> defaultKeys = new()
     {
-        { "fastroll", new(i => (i.analogueDir.y >= -0.5f && i.analogueDir.y < -0.05f)) { text = "FR" } },
+        { "fastroll", new(i => (i.analogueDir.y >= -0.5f && i.analogueDir.y < -0.05f)) { text = "FR", abbreviate = false } },
         { "special", new(i => i.spec) { text = "Spec" } },
         { "grab", new(i => i.pckp) { text = "Grab" }  },
         { "throw", new(i => i.thrw) { text = "Throw" }  },

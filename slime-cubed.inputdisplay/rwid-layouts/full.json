@@ -8,6 +8,6 @@
     "jump": { "x": 1, "y": 1 },
     "map": { "x": 2, "y": 1 },
     "up": { "x": 3, "y": 1 },
-    "analog": { "x": 4, "y": 1 }
-    "fastroll": { "x": 5, "y": 0, "abbreviate": false }
+    "analog": { "x": 4, "y": 1 },
+    "fastroll": { "x": 5, "y": 0 }
 }
