@@ -26,7 +26,7 @@ namespace RWInputDisplay;
 public class RWInputDisplay : BaseUnityPlugin
 {
     public const string MOD_ID = "slime-cubed.inputdisplay";
-    public const string MOD_VERSION = "2.3.0";
+    public const string MOD_VERSION = "2.3.1";
 
     public static InputGraphic[] inputGraphics = new InputGraphic[1];
     public static Configurable<bool> enableInterpolation;

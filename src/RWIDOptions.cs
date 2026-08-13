@@ -303,7 +303,7 @@ public class RWIDOptions : OptionInterface
                     sprite.color = color;
                     layoutContainer.AddChild(sprite);
 
-                    var text = new FLabel("font", pair.Key);
+                    var text = new FLabel(RWCustom.Custom.GetFont(), pair.Key);
                     text.scale = 1f / scale;
                     text.SetAnchor(0.5f, 0.5f);
                     text.SetPosition(key.pos + buttonSize / 2f * Vector2.one);
